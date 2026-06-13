@@ -85,21 +85,73 @@ class SudokuGenerator {
     final puzzle = solvedGrid.map((row) => List<int>.from(row)).toList();
     final rand = Random();
 
-    final int holes = switch (difficulty) {
+    final int targetHoles = switch (difficulty) {
       Difficulty.easy => 35,
       Difficulty.medium => 45,
       Difficulty.hard => 55,
     };
 
-    int count = 0;
-    while (count < holes) {
-      final r = rand.nextInt(9);
-      final c = rand.nextInt(9);
+    final positions = List.generate(81, (i) => i)..shuffle(rand);
+
+    int holes = 0;
+    for (int pos in positions) {
+      if (holes >= targetHoles) break;
+
+      int r = pos ~/ 9;
+      int c = pos % 9;
+
       if (puzzle[r][c] != 0) {
+        int backup = puzzle[r][c];
         puzzle[r][c] = 0;
-        count++;
+
+        // Check if removing this cell leaves exactly one solution
+        if (_countSolutions(puzzle) == 1) {
+          holes++;
+        } else {
+          // If multiple solutions exist, we must keep this clue
+          puzzle[r][c] = backup;
+        }
       }
     }
     return puzzle;
+  }
+
+  /// Backtracking solver to count how many solutions exist for the grid.
+  /// Used to ensure the generated puzzle has exactly 1 unique solution.
+  static int _countSolutions(List<List<int>> grid) {
+    for (int r = 0; r < 9; r++) {
+      for (int c = 0; c < 9; c++) {
+        if (grid[r][c] == 0) {
+          int count = 0;
+          for (int n = 1; n <= 9; n++) {
+            if (_isValid(grid, r, c, n)) {
+              grid[r][c] = n;
+              count += _countSolutions(grid);
+              grid[r][c] = 0;
+              // Optimization: if we find more than 1 solution, stop searching
+              if (count > 1) return count;
+            }
+          }
+          return count;
+        }
+      }
+    }
+    // Base case: board is full, one solution found
+    return 1;
+  }
+
+  static bool _isValid(List<List<int>> grid, int r, int c, int n) {
+    for (int i = 0; i < 9; i++) {
+      if (grid[r][i] == n) return false;
+      if (grid[i][c] == n) return false;
+    }
+    int br = (r ~/ 3) * 3;
+    int bc = (c ~/ 3) * 3;
+    for (int i = 0; i < 3; i++) {
+      for (int j = 0; j < 3; j++) {
+        if (grid[br + i][bc + j] == n) return false;
+      }
+    }
+    return true;
   }
 }

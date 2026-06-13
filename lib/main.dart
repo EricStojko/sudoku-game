@@ -36,12 +36,17 @@ class SudokuCell {
   int currentValue;
   final bool isFixed;
   bool isErrorHighlight;
+  // Tracks whether a mistake has already been counted for the current wrong
+  // value in this cell. Prevents double-counting when the user erases and
+  // re-enters the same (or a different) wrong number without a correct attempt.
+  bool hasMistake;
 
   SudokuCell({
     required this.correctValue,
     required this.currentValue,
     required this.isFixed,
     this.isErrorHighlight = false,
+    this.hasMistake = false,
   });
 }
 
@@ -275,12 +280,24 @@ class _SudokuGameScreenState extends State<SudokuGameScreen> {
     if (cell.isFixed) return;
 
     setState(() {
-      // Increment mistake counter immediately if a new wrong number is entered
-      if (num != 0 && cell.currentValue != num && num != cell.correctValue) {
-        _mistakes++;
+      if (num == 0) {
+        // Erase: clear the wrong-entry flag so the next entry is a fresh attempt.
+        cell.currentValue = 0;
+        cell.hasMistake = false;
+      } else if (num == cell.correctValue) {
+        // Correct value: resolve the cell cleanly.
+        cell.currentValue = num;
+        cell.hasMistake = false;
+      } else {
+        // Wrong value: only count a mistake if this cell isn't already penalised.
+        // This prevents double-counting when switching between wrong numbers
+        // without erasing first.
+        if (!cell.hasMistake) {
+          _mistakes++;
+          cell.hasMistake = true;
+        }
+        cell.currentValue = num;
       }
-
-      cell.currentValue = num;
 
       if (_mistakes >= 3) {
         _isPlaying = false;

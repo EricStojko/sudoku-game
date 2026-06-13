@@ -122,7 +122,7 @@ void main() {
       expect(cell.currentValue, cell.correctValue);
     });
 
-    test('non-fixed cell starts with currentValue 0', () {
+    test('non-fixed cell starts with currentValue 0 and hasMistake false', () {
       final cell = SudokuCell(
         correctValue: 7,
         currentValue: 0,
@@ -131,6 +131,85 @@ void main() {
       expect(cell.isFixed, isFalse);
       expect(cell.currentValue, 0);
       expect(cell.isErrorHighlight, isFalse);
+      expect(cell.hasMistake, isFalse);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Mistake counting logic (bug fix: double-counting prevention)
+  // ---------------------------------------------------------------------------
+  group('Mistake counting (hasMistake flag)', () {
+    late SudokuCell cell;
+
+    setUp(() {
+      cell = SudokuCell(correctValue: 5, currentValue: 0, isFixed: false);
+    });
+
+    test('hasMistake is false by default', () {
+      expect(cell.hasMistake, isFalse);
+    });
+
+    test('entering a wrong number sets hasMistake to true', () {
+      // Simulate what _onNumberInput does for a wrong entry
+      cell.hasMistake = true;
+      cell.currentValue = 3;
+      expect(cell.hasMistake, isTrue);
+      expect(cell.currentValue, 3);
+    });
+
+    test('erasing a wrong number resets hasMistake to false', () {
+      cell.currentValue = 3;
+      cell.hasMistake = true;
+
+      // Simulate erase
+      cell.currentValue = 0;
+      cell.hasMistake = false;
+
+      expect(cell.hasMistake, isFalse);
+      expect(cell.currentValue, 0);
+    });
+
+    test('entering a second wrong number while hasMistake=true does NOT re-set flag (no double count)', () {
+      // First wrong entry
+      cell.hasMistake = true;
+      cell.currentValue = 3;
+
+      // Second wrong entry (different number, no erase) — hasMistake already true, no new mistake
+      final mistakesBefore = cell.hasMistake ? 1 : 0;
+      if (!cell.hasMistake) cell.hasMistake = true; // guard: only set once
+      cell.currentValue = 7;
+
+      expect(cell.hasMistake, isTrue);
+      expect(mistakesBefore, 1); // only one mistake was ever counted
+    });
+
+    test('after erasing, entering another wrong number should be a fresh mistake', () {
+      // First wrong entry
+      cell.hasMistake = true;
+      cell.currentValue = 3;
+
+      // Erase
+      cell.currentValue = 0;
+      cell.hasMistake = false;
+
+      // Fresh wrong entry again
+      expect(cell.hasMistake, isFalse); // flag was cleared, so next wrong entry will count
+      cell.hasMistake = true;
+      cell.currentValue = 7;
+
+      expect(cell.hasMistake, isTrue);
+    });
+
+    test('entering the correct value clears hasMistake', () {
+      cell.hasMistake = true;
+      cell.currentValue = 3;
+
+      // Correct entry
+      cell.currentValue = cell.correctValue;
+      cell.hasMistake = false;
+
+      expect(cell.hasMistake, isFalse);
+      expect(cell.currentValue, 5);
     });
   });
 

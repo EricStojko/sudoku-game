@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import '../models/difficulty.dart';
 import '../models/sudoku_cell.dart';
 import '../logic/sudoku_generator.dart';
@@ -11,7 +11,10 @@ enum GameStatus { idle, playing, won, gameOver }
 ///
 /// This is a [ChangeNotifier] — the UI listens to it via [ListenableBuilder]
 /// and rebuilds only when [notifyListeners] is called.
-class GameNotifier extends ChangeNotifier {
+class GameNotifier extends ChangeNotifier with WidgetsBindingObserver {
+  GameNotifier() {
+    WidgetsBinding.instance.addObserver(this);
+  }
   // -------------------------------------------------------------------------
   // State
   // -------------------------------------------------------------------------
@@ -62,12 +65,7 @@ class GameNotifier extends ChangeNotifier {
       ),
     );
 
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (isPlaying) {
-        secondsElapsed++;
-        notifyListeners();
-      }
-    });
+    _startTimer();
 
     notifyListeners();
   }
@@ -194,6 +192,28 @@ class GameNotifier extends ChangeNotifier {
   // Private helpers
   // -------------------------------------------------------------------------
 
+  void _startTimer() {
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (isPlaying) {
+        secondsElapsed++;
+        notifyListeners();
+      }
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      _timer?.cancel();
+    } else if (state == AppLifecycleState.resumed) {
+      if (isPlaying) {
+        _startTimer();
+      }
+    }
+  }
+
   void _checkWinCondition() {
     for (final row in grid) {
       for (final cell in row) {
@@ -206,6 +226,7 @@ class GameNotifier extends ChangeNotifier {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
     _confettiTimer?.cancel();
     super.dispose();

@@ -1,6 +1,8 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 
+enum ConfettiShape { circle, square, triangle }
+
 /// A full-screen confetti animation overlay. Pass [showConfetti] = true to
 /// trigger the animation. It is non-interactive ([IgnorePointer] wrapped).
 class ConfettiOverlay extends StatefulWidget {
@@ -50,6 +52,7 @@ class _ConfettiOverlayState extends State<ConfettiOverlay>
         dy: _rand.nextDouble() * 400 + 200,
         size: _rand.nextDouble() * 6 + 4,
         color: Colors.primaries[_rand.nextInt(Colors.primaries.length)],
+        shape: ConfettiShape.values[_rand.nextInt(ConfettiShape.values.length)],
       );
     });
   }
@@ -96,7 +99,33 @@ class ConfettiPainter extends CustomPainter {
       final x = p.x + p.dx * progress;
       // Parabolic gravity: y increases quadratically over time.
       final y = p.y + p.dy * progress + 400 * progress * progress;
-      canvas.drawCircle(Offset(x, y), p.size, paint);
+
+      canvas.save();
+      canvas.translate(x, y);
+      // Rotate shapes as they fall
+      canvas.rotate(progress * pi * 4 + p.x); // use p.x as a random starting angle offset
+      
+      switch (p.shape) {
+        case ConfettiShape.circle:
+          canvas.drawCircle(Offset.zero, p.size, paint);
+          break;
+        case ConfettiShape.square:
+          canvas.drawRect(
+            Rect.fromCenter(center: Offset.zero, width: p.size * 2, height: p.size * 2),
+            paint,
+          );
+          break;
+        case ConfettiShape.triangle:
+          final path = Path()
+            ..moveTo(0, -p.size)
+            ..lineTo(p.size, p.size)
+            ..lineTo(-p.size, p.size)
+            ..close();
+          canvas.drawPath(path, paint);
+          break;
+      }
+      
+      canvas.restore();
     }
   }
 
@@ -108,6 +137,7 @@ class ConfettiPainter extends CustomPainter {
 class ConfettiParticle {
   final double x, y, dx, dy, size;
   final Color color;
+  final ConfettiShape shape;
 
   const ConfettiParticle({
     required this.x,
@@ -116,5 +146,6 @@ class ConfettiParticle {
     required this.dy,
     required this.size,
     required this.color,
+    required this.shape,
   });
 }

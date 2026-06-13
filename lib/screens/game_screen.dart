@@ -129,7 +129,8 @@ class _SudokuGameScreenState extends State<SudokuGameScreen> {
   void _showWinDialog() async {
     final elapsed = _notifier.secondsElapsed;
     final difficulty = _notifier.difficulty;
-    final isTop = await LeaderboardService.isTop10(difficulty, elapsed);
+    final eligible = _notifier.isLeaderboardEligible;
+    final isTop = eligible ? await LeaderboardService.isTop10(difficulty, elapsed) : false;
 
     if (!mounted) return;
 
@@ -154,6 +155,16 @@ class _SudokuGameScreenState extends State<SudokuGameScreen> {
                 'Time: ${GameNotifier.formatTime(elapsed)}',
                 style: const TextStyle(fontSize: 18),
               ),
+              if (!eligible) ...[
+                const SizedBox(height: 15),
+                const Text(
+                  'Leaderboard disabled (Hints used)',
+                  style: TextStyle(
+                      color: Colors.orange,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14),
+                ),
+              ],
               if (isTop) ...[
                 const SizedBox(height: 15),
                 const Text(
@@ -251,82 +262,85 @@ class _SudokuGameScreenState extends State<SudokuGameScreen> {
   }
 
   void _showLeaderboard() async {
-    final entries =
-        await LeaderboardService.fetchEntries(_notifier.difficulty);
+    final results = await Future.wait([
+      LeaderboardService.fetchEntries(Difficulty.easy),
+      LeaderboardService.fetchEntries(Difficulty.medium),
+      LeaderboardService.fetchEntries(Difficulty.hard),
+    ]);
     if (!mounted) return;
 
     showDialog(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          backgroundColor: const Color(0xFFFDFBFF),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Center(
-            child: Text(
-              'Top 10 - ${_notifier.difficulty.name.toUpperCase()}',
-              style: TextStyle(
-                  color: AppColors.primaryDark,
-                  fontWeight: FontWeight.bold),
-            ),
-          ),
-          content: SizedBox(
-            width: double.maxFinite,
-            height: 300,
-            child: entries.isEmpty
-                ? const Center(
-                    child: Text('No scores yet!',
-                        style: TextStyle(color: Colors.grey)))
-                : ListView.builder(
-                    itemCount: entries.length,
-                    itemBuilder: (context, index) {
-                      final entry = entries[index];
-                      return ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: AppColors.accentPastel,
-                          child: Text(
-                            '${index + 1}',
-                            style: TextStyle(
-                                color: AppColors.primaryDark,
-                                fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                        title: Text(
-                          entry.name,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF1F2937)),
-                        ),
-                        trailing: Text(
-                          GameNotifier.formatTime(entry.timeInSeconds),
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.primaryDark),
-                        ),
-                        subtitle: Text(entry.date,
-                            style: const TextStyle(fontSize: 12)),
-                      );
-                    },
-                  ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _notifier.startNewGame(_notifier.difficulty);
-              },
+        return DefaultTabController(
+          length: 3,
+          initialIndex: _notifier.difficulty.index,
+          child: AlertDialog(
+            backgroundColor: const Color(0xFFFDFBFF),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            contentPadding: const EdgeInsets.only(top: 20),
+            title: Center(
               child: Text(
-                'Play Again',
-                style:
-                    TextStyle(fontSize: 16, color: AppColors.primaryDark),
+                'Leaderboards',
+                style: TextStyle(color: AppColors.primaryDark, fontWeight: FontWeight.bold),
               ),
             ),
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Close',
-                  style: TextStyle(fontSize: 16, color: Colors.grey)),
+            content: SizedBox(
+              width: double.maxFinite,
+              height: 400,
+              child: Column(
+                children: [
+                  TabBar(
+                    labelColor: AppColors.primaryDark,
+                    unselectedLabelColor: Colors.grey,
+                    indicatorColor: AppColors.primaryDark,
+                    tabs: const [
+                      Tab(text: 'EASY'),
+                      Tab(text: 'MEDIUM'),
+                      Tab(text: 'HARD'),
+                    ],
+                  ),
+                  Expanded(
+                    child: TabBarView(
+                      children: results.map((entries) {
+                        if (entries.isEmpty) {
+                          return const Center(child: Text('No scores yet!', style: TextStyle(color: Colors.grey)));
+                        }
+                        return ListView.builder(
+                          itemCount: entries.length,
+                          itemBuilder: (context, index) {
+                            final entry = entries[index];
+                            return ListTile(
+                              leading: CircleAvatar(
+                                backgroundColor: AppColors.accentPastel,
+                                child: Text('${index + 1}', style: TextStyle(color: AppColors.primaryDark, fontWeight: FontWeight.bold)),
+                              ),
+                              title: Text(entry.name, style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1F2937))),
+                              trailing: Text(GameNotifier.formatTime(entry.timeInSeconds), style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primaryDark)),
+                              subtitle: Text(entry.date, style: const TextStyle(fontSize: 12)),
+                            );
+                          },
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ],
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _notifier.startNewGame(_notifier.difficulty);
+                },
+                child: Text('Play Again', style: TextStyle(fontSize: 16, color: AppColors.primaryDark)),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close', style: TextStyle(fontSize: 16, color: Colors.grey)),
+              ),
+            ],
+          ),
         );
       },
     );
@@ -512,6 +526,18 @@ class _SudokuGameScreenState extends State<SudokuGameScreen> {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         ElevatedButton.icon(
+          onPressed: _notifier.canUndo ? _notifier.undo : null,
+          icon: const Icon(Icons.undo),
+          label: const Text('Undo'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.white,
+            foregroundColor: AppColors.primaryDark,
+            shape: const StadiumBorder(),
+            elevation: 2,
+          ),
+        ),
+        const SizedBox(width: 10),
+        ElevatedButton.icon(
           onPressed: _notifier.useCheck,
           icon: const Icon(Icons.check_circle_outline),
           label: const Text('Check'),
@@ -522,11 +548,11 @@ class _SudokuGameScreenState extends State<SudokuGameScreen> {
             elevation: 2,
           ),
         ),
-        const SizedBox(width: 20),
+        const SizedBox(width: 10),
         ElevatedButton.icon(
-          onPressed: _notifier.useHint,
+          onPressed: _notifier.canUseHint ? _notifier.useHint : null,
           icon: const Icon(Icons.lightbulb_outline),
-          label: const Text('Hint'),
+          label: Text('Hint (${5 - _notifier.hintsUsed})'),
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.white,
             foregroundColor: Colors.orange.shade700,

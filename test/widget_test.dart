@@ -292,12 +292,13 @@ void main() {
       expect(find.byIcon(Icons.leaderboard_rounded), findsOneWidget);
     });
 
-    testWidgets('Check and Hint action buttons are rendered',
+    testWidgets('Action buttons (Undo, Check, Hint) are rendered',
         (WidgetTester tester) async {
       await tester.pumpWidget(const SudokuApp());
       await tester.pump(const Duration(milliseconds: 100));
+      expect(find.text('Undo'), findsOneWidget);
       expect(find.text('Check'), findsOneWidget);
-      expect(find.text('Hint'), findsOneWidget);
+      expect(find.text('Hint (5)'), findsOneWidget);
     });
   });
 }

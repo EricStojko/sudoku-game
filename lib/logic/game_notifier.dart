@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/difficulty.dart';
+import '../models/move.dart';
 import '../models/sudoku_cell.dart';
 import '../logic/sudoku_generator.dart';
 
@@ -34,13 +35,19 @@ class GameNotifier extends ChangeNotifier with WidgetsBindingObserver {
   int selectedCol = -1;
   int mistakes = 0;
   int secondsElapsed = 0;
+  int hintsUsed = 0;
   GameStatus status = GameStatus.idle;
   bool showConfetti = false;
+  bool isLeaderboardEligible = true;
+
+  final List<Move> _history = [];
 
   Timer? _timer;
   Timer? _confettiTimer;
 
   bool get isPlaying => status == GameStatus.playing;
+  bool get canUndo => _history.isNotEmpty;
+  bool get canUseHint => hintsUsed < 5;
 
   // -------------------------------------------------------------------------
   // Game lifecycle
@@ -56,8 +63,11 @@ class GameNotifier extends ChangeNotifier with WidgetsBindingObserver {
     selectedRow = -1;
     selectedCol = -1;
     secondsElapsed = 0;
+    hintsUsed = 0;
     status = GameStatus.playing;
     showConfetti = false;
+    isLeaderboardEligible = true;
+    _history.clear();
 
     final solved = SudokuGenerator.generateCompleted();
     final puzzle = SudokuGenerator.generatePuzzle(solved, diff);
@@ -107,6 +117,14 @@ class GameNotifier extends ChangeNotifier with WidgetsBindingObserver {
     final cell = grid[selectedRow][selectedCol];
     if (cell.isFixed) return;
 
+    // Record state for undo before making any changes
+    _history.add(Move(
+      row: selectedRow,
+      col: selectedCol,
+      previousValue: cell.currentValue,
+      previousHasMistake: cell.hasMistake,
+    ));
+
     if (num == 0) {
       // Erase — clear the penalty flag so the next entry is a fresh attempt.
       cell.currentValue = 0;
@@ -135,15 +153,42 @@ class GameNotifier extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
-  /// Fills the selected cell with its correct value.
+  /// Fills the selected cell with its correct value. Max 5 hints.
   void useHint() {
-    if (!isPlaying || selectedRow == -1 || selectedCol == -1) return;
+    if (!isPlaying || selectedRow == -1 || selectedCol == -1 || hintsUsed >= 5) return;
     final cell = grid[selectedRow][selectedCol];
     if (cell.isFixed || cell.currentValue == cell.correctValue) return;
 
+    // Hints are undoable, but the disqualification remains!
+    _history.add(Move(
+      row: selectedRow,
+      col: selectedCol,
+      previousValue: cell.currentValue,
+      previousHasMistake: cell.hasMistake,
+    ));
+
+    isLeaderboardEligible = false;
+    hintsUsed++;
     cell.currentValue = cell.correctValue;
     cell.hasMistake = false;
     _checkWinCondition();
+    notifyListeners();
+  }
+
+  /// Reverts the most recent move.
+  void undo() {
+    if (!isPlaying || _history.isEmpty) return;
+
+    final lastMove = _history.removeLast();
+    final cell = grid[lastMove.row][lastMove.col];
+
+    cell.currentValue = lastMove.previousValue;
+    cell.hasMistake = lastMove.previousHasMistake;
+
+    // Move selection back to the undone cell for convenience
+    selectedRow = lastMove.row;
+    selectedCol = lastMove.col;
+
     notifyListeners();
   }
 
@@ -236,6 +281,8 @@ class GameNotifier extends ChangeNotifier with WidgetsBindingObserver {
       'difficulty': difficulty.name,
       'mistakes': mistakes,
       'secondsElapsed': secondsElapsed,
+      'hintsUsed': hintsUsed,
+      'isLeaderboardEligible': isLeaderboardEligible,
       'grid': grid.map((row) => row.map((c) => c.toJson()).toList()).toList(),
     };
     await prefs.setString('saved_game', jsonEncode(data));
@@ -250,6 +297,9 @@ class GameNotifier extends ChangeNotifier with WidgetsBindingObserver {
         difficulty = Difficulty.values.firstWhere((d) => d.name == data['difficulty']);
         mistakes = data['mistakes'];
         secondsElapsed = data['secondsElapsed'];
+        hintsUsed = data['hintsUsed'] ?? 0;
+        isLeaderboardEligible = data['isLeaderboardEligible'] ?? true;
+        _history.clear(); // Transient history resets on load
         
         final List dynamicGrid = data['grid'];
         grid = dynamicGrid.map((row) => (row as List).map((c) => SudokuCell.fromJson(c)).toList()).toList();

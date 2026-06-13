@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/difficulty.dart';
 import '../models/sudoku_cell.dart';
 import '../logic/sudoku_generator.dart';
@@ -14,6 +16,13 @@ enum GameStatus { idle, playing, won, gameOver }
 class GameNotifier extends ChangeNotifier with WidgetsBindingObserver {
   GameNotifier() {
     WidgetsBinding.instance.addObserver(this);
+  }
+
+  void initGame() {
+    // Start a default game synchronously so the UI has a valid grid immediately.
+    startNewGame(Difficulty.easy);
+    // Attempt to load a saved game and overwrite the default game.
+    _loadGame();
   }
   // -------------------------------------------------------------------------
   // State
@@ -118,6 +127,7 @@ class GameNotifier extends ChangeNotifier with WidgetsBindingObserver {
     if (mistakes >= 3) {
       _timer?.cancel();
       status = GameStatus.gameOver;
+      _saveGame(); // Clears the save
     } else {
       _checkWinCondition();
     }
@@ -207,9 +217,53 @@ class GameNotifier extends ChangeNotifier with WidgetsBindingObserver {
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
       _timer?.cancel();
+      _saveGame();
     } else if (state == AppLifecycleState.resumed) {
       if (isPlaying) {
         _startTimer();
+      }
+    }
+  }
+
+  Future<void> _saveGame() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (status != GameStatus.playing) {
+      await prefs.remove('saved_game');
+      return;
+    }
+    
+    final data = {
+      'difficulty': difficulty.name,
+      'mistakes': mistakes,
+      'secondsElapsed': secondsElapsed,
+      'grid': grid.map((row) => row.map((c) => c.toJson()).toList()).toList(),
+    };
+    await prefs.setString('saved_game', jsonEncode(data));
+  }
+
+  Future<void> _loadGame() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getString('saved_game');
+    if (saved != null) {
+      try {
+        final data = jsonDecode(saved);
+        difficulty = Difficulty.values.firstWhere((d) => d.name == data['difficulty']);
+        mistakes = data['mistakes'];
+        secondsElapsed = data['secondsElapsed'];
+        
+        final List dynamicGrid = data['grid'];
+        grid = dynamicGrid.map((row) => (row as List).map((c) => SudokuCell.fromJson(c)).toList()).toList();
+        
+        status = GameStatus.playing;
+        showConfetti = false;
+        selectedRow = -1;
+        selectedCol = -1;
+        
+        _startTimer();
+        notifyListeners();
+      } catch (e) {
+        // If save is corrupted, the default game we started in initGame() remains.
+        await prefs.remove('saved_game');
       }
     }
   }
@@ -222,6 +276,7 @@ class GameNotifier extends ChangeNotifier with WidgetsBindingObserver {
     }
     _timer?.cancel();
     status = GameStatus.won;
+    _saveGame(); // Clears the save because status != playing
   }
 
   @override

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'logic/game_notifier.dart';
-import 'models/difficulty.dart';
 import 'screens/game_screen.dart';
 
 class SudokuApp extends StatelessWidget {
@@ -10,7 +9,7 @@ class SudokuApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) => GameNotifier()..startNewGame(Difficulty.easy),
+      create: (_) => GameNotifier()..initGame(),
       child: MaterialApp(
         title: 'StojkoDoku',
         debugShowCheckedModeBanner: false,

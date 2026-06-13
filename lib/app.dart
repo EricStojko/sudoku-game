@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'logic/game_notifier.dart';
+import 'models/difficulty.dart';
 import 'screens/game_screen.dart';
 
 class SudokuApp extends StatelessWidget {
@@ -6,15 +9,18 @@ class SudokuApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'StojkoDoku',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        primarySwatch: Colors.purple,
-        scaffoldBackgroundColor: const Color(0xFFFDFBFF),
-        useMaterial3: true,
+    return ChangeNotifierProvider(
+      create: (_) => GameNotifier()..startNewGame(Difficulty.easy),
+      child: MaterialApp(
+        title: 'StojkoDoku',
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData(
+          primarySwatch: Colors.purple,
+          scaffoldBackgroundColor: const Color(0xFFFDFBFF),
+          useMaterial3: true,
+        ),
+        home: const SudokuGameScreen(),
       ),
-      home: const SudokuGameScreen(),
     );
   }
 }

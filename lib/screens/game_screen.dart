@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import '../app_colors.dart';
 import '../logic/game_notifier.dart';
 import '../models/difficulty.dart';
@@ -15,21 +16,26 @@ class SudokuGameScreen extends StatefulWidget {
 }
 
 class _SudokuGameScreenState extends State<SudokuGameScreen> {
+  // Obtained once from the Provider tree in didChangeDependencies.
+  // Kept as a field so non-build methods (keyboard handler, dialogs) can
+  // access the notifier without needing a BuildContext.
   late final GameNotifier _notifier;
+  bool _notifierBound = false;
 
   @override
-  void initState() {
-    super.initState();
-    _notifier = GameNotifier();
-    // React to game-status changes (won / gameOver) outside the build phase.
-    _notifier.addListener(_handleStatusChange);
-    _notifier.startNewGame(Difficulty.easy);
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_notifierBound) {
+      // context.read — we only need the reference once, not a rebuild trigger.
+      _notifier = context.read<GameNotifier>();
+      _notifier.addListener(_handleStatusChange);
+      _notifierBound = true;
+    }
   }
 
   @override
   void dispose() {
     _notifier.removeListener(_handleStatusChange);
-    _notifier.dispose();
     super.dispose();
   }
 
@@ -39,7 +45,6 @@ class _SudokuGameScreenState extends State<SudokuGameScreen> {
 
   void _handleStatusChange() {
     if (_notifier.status == GameStatus.won) {
-      // Use postFrameCallback so we don't show a dialog mid-build.
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           _notifier.triggerConfetti();
@@ -623,58 +628,56 @@ class _SudokuGameScreenState extends State<SudokuGameScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: _notifier,
-      builder: (context, _) {
-        return Focus(
-          autofocus: true,
-          onKeyEvent: _handleKeyEvent,
-          child: ConfettiOverlay(
-            showConfetti: _notifier.showConfetti,
-            child: Scaffold(
-              appBar: AppBar(
-                backgroundColor: Colors.transparent,
-                elevation: 0,
-                title: Text(
-                  'StojkoDoku',
-                  style: TextStyle(
-                      color: AppColors.primaryDark,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 24),
-                ),
-                centerTitle: true,
-                actions: [
-                  IconButton(
-                    icon: Icon(Icons.leaderboard_rounded,
-                        color: Colors.purple.shade400),
-                    onPressed: _showLeaderboard,
-                  ),
-                ],
+    // context.watch subscribes this widget to GameNotifier changes,
+    // replacing the old ListenableBuilder.
+    final notifier = context.watch<GameNotifier>();
+    return Focus(
+      autofocus: true,
+      onKeyEvent: _handleKeyEvent,
+      child: ConfettiOverlay(
+        showConfetti: notifier.showConfetti,
+        child: Scaffold(
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            title: Text(
+              'StojkoDoku',
+              style: TextStyle(
+                  color: AppColors.primaryDark,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 24),
+            ),
+            centerTitle: true,
+            actions: [
+              IconButton(
+                icon: Icon(Icons.leaderboard_rounded,
+                    color: Colors.purple.shade400),
+                onPressed: _showLeaderboard,
               ),
-              body: SafeArea(
-                child: Center(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const SizedBox(height: 10),
-                        _buildTopControls(_notifier),
-                        const SizedBox(height: 20),
-                        _buildGrid(_notifier),
-                        const SizedBox(height: 20),
-                        _buildActionButtons(),
-                        const SizedBox(height: 20),
-                        _buildNumberPad(),
-                        const SizedBox(height: 20),
-                      ],
-                    ),
-                  ),
+            ],
+          ),
+          body: SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const SizedBox(height: 10),
+                    _buildTopControls(notifier),
+                    const SizedBox(height: 20),
+                    _buildGrid(notifier),
+                    const SizedBox(height: 20),
+                    _buildActionButtons(),
+                    const SizedBox(height: 20),
+                    _buildNumberPad(),
+                    const SizedBox(height: 20),
+                  ],
                 ),
               ),
             ),
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 }

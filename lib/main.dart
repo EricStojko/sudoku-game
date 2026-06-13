@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() async {
@@ -793,10 +794,89 @@ class _SudokuGameScreenState extends State<SudokuGameScreen> {
     );
   }
 
+  // --- KEYBOARD INPUT ---
+
+  /// Moves the selected cell by [dr] rows and [dc] columns, clamped to the
+  /// board bounds. If nothing is selected yet, starts at (0, 0).
+  void _moveSelection(int dr, int dc) {
+    setState(() {
+      _selectedRow = (_selectedRow == -1 ? 0 : _selectedRow + dr).clamp(0, 8);
+      _selectedCol = (_selectedCol == -1 ? 0 : _selectedCol + dc).clamp(0, 8);
+    });
+  }
+
+  /// Handles physical keyboard events so players on web/desktop can use
+  /// their keyboard instead of (or alongside) the on-screen number pad.
+  KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
+    // Only act on initial key-down and auto-repeated key events.
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+
+    final key = event.logicalKey;
+
+    // Map both main-row digits and numpad digits to their numeric value.
+    final Map<LogicalKeyboardKey, int> digitKeys = {
+      LogicalKeyboardKey.digit1: 1,
+      LogicalKeyboardKey.digit2: 2,
+      LogicalKeyboardKey.digit3: 3,
+      LogicalKeyboardKey.digit4: 4,
+      LogicalKeyboardKey.digit5: 5,
+      LogicalKeyboardKey.digit6: 6,
+      LogicalKeyboardKey.digit7: 7,
+      LogicalKeyboardKey.digit8: 8,
+      LogicalKeyboardKey.digit9: 9,
+      LogicalKeyboardKey.numpad1: 1,
+      LogicalKeyboardKey.numpad2: 2,
+      LogicalKeyboardKey.numpad3: 3,
+      LogicalKeyboardKey.numpad4: 4,
+      LogicalKeyboardKey.numpad5: 5,
+      LogicalKeyboardKey.numpad6: 6,
+      LogicalKeyboardKey.numpad7: 7,
+      LogicalKeyboardKey.numpad8: 8,
+      LogicalKeyboardKey.numpad9: 9,
+    };
+
+    if (digitKeys.containsKey(key)) {
+      _onNumberInput(digitKeys[key]!);
+      return KeyEventResult.handled;
+    }
+
+    // Delete or Backspace → erase the selected cell.
+    if (key == LogicalKeyboardKey.delete ||
+        key == LogicalKeyboardKey.backspace) {
+      _onNumberInput(0);
+      return KeyEventResult.handled;
+    }
+
+    // Arrow keys → move the selected cell.
+    if (key == LogicalKeyboardKey.arrowUp) {
+      _moveSelection(-1, 0);
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.arrowDown) {
+      _moveSelection(1, 0);
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.arrowLeft) {
+      _moveSelection(0, -1);
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.arrowRight) {
+      _moveSelection(0, 1);
+      return KeyEventResult.handled;
+    }
+
+    return KeyEventResult.ignored;
+  }
+
   @override
   Widget build(BuildContext context) {
-    return ConfettiOverlay(
-      showConfetti: _showConfetti,
+    return Focus(
+      autofocus: true,
+      onKeyEvent: _handleKeyEvent,
+      child: ConfettiOverlay(
+        showConfetti: _showConfetti,
       child: Scaffold(
         appBar: AppBar(
           backgroundColor: Colors.transparent,
@@ -829,6 +909,7 @@ class _SudokuGameScreenState extends State<SudokuGameScreen> {
               ),
             ),
           ),
+        ),
         ),
       ),
     );

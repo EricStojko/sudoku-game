@@ -1,6 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:stojkodoku/main.dart';
+
+// Import from the new modular structure
+import 'package:stojkodoku/app.dart';
+import 'package:stojkodoku/models/difficulty.dart';
+import 'package:stojkodoku/models/leaderboard_entry.dart';
+import 'package:stojkodoku/models/sudoku_cell.dart';
+import 'package:stojkodoku/logic/sudoku_generator.dart';
+import 'package:stojkodoku/logic/game_notifier.dart';
 
 void main() {
   // ---------------------------------------------------------------------------
@@ -51,7 +58,6 @@ void main() {
       final solved = SudokuGenerator.generateCompleted();
       final puzzle = SudokuGenerator.generatePuzzle(solved, Difficulty.easy);
       final holes = puzzle.expand((row) => row).where((v) => v == 0).length;
-      // Allow small variance from random removal
       expect(holes, inInclusiveRange(30, 40));
     });
 
@@ -64,7 +70,8 @@ void main() {
 
     test('generatePuzzle preserves correct values in non-empty cells', () {
       final solved = SudokuGenerator.generateCompleted();
-      final puzzle = SudokuGenerator.generatePuzzle(solved, Difficulty.medium);
+      final puzzle =
+          SudokuGenerator.generatePuzzle(solved, Difficulty.medium);
       for (int r = 0; r < 9; r++) {
         for (int c = 0; c < 9; c++) {
           if (puzzle[r][c] != 0) {
@@ -74,13 +81,12 @@ void main() {
       }
     });
 
-    test('two calls to generateCompleted produce different grids (randomness)', () {
-      // There is a tiny chance of collision, but practically negligible.
+    test('two calls to generateCompleted produce different grids (randomness)',
+        () {
       final grid1 = SudokuGenerator.generateCompleted();
       final grid2 = SudokuGenerator.generateCompleted();
       final flat1 = grid1.expand((r) => r).toList();
       final flat2 = grid2.expand((r) => r).toList();
-      // At least one value should differ after shuffling
       expect(flat1, isNot(equals(flat2)));
     });
   });
@@ -150,7 +156,6 @@ void main() {
     });
 
     test('entering a wrong number sets hasMistake to true', () {
-      // Simulate what _onNumberInput does for a wrong entry
       cell.hasMistake = true;
       cell.currentValue = 3;
       expect(cell.hasMistake, isTrue);
@@ -161,7 +166,6 @@ void main() {
       cell.currentValue = 3;
       cell.hasMistake = true;
 
-      // Simulate erase
       cell.currentValue = 0;
       cell.hasMistake = false;
 
@@ -169,31 +173,29 @@ void main() {
       expect(cell.currentValue, 0);
     });
 
-    test('entering a second wrong number while hasMistake=true does NOT re-set flag (no double count)', () {
-      // First wrong entry
+    test(
+        'entering a second wrong number while hasMistake=true does NOT re-set flag (no double count)',
+        () {
       cell.hasMistake = true;
       cell.currentValue = 3;
 
-      // Second wrong entry (different number, no erase) — hasMistake already true, no new mistake
       final mistakesBefore = cell.hasMistake ? 1 : 0;
-      if (!cell.hasMistake) cell.hasMistake = true; // guard: only set once
+      if (!cell.hasMistake) cell.hasMistake = true;
       cell.currentValue = 7;
 
       expect(cell.hasMistake, isTrue);
-      expect(mistakesBefore, 1); // only one mistake was ever counted
+      expect(mistakesBefore, 1);
     });
 
-    test('after erasing, entering another wrong number should be a fresh mistake', () {
-      // First wrong entry
+    test('after erasing, entering another wrong number should be a fresh mistake',
+        () {
       cell.hasMistake = true;
       cell.currentValue = 3;
 
-      // Erase
       cell.currentValue = 0;
       cell.hasMistake = false;
 
-      // Fresh wrong entry again
-      expect(cell.hasMistake, isFalse); // flag was cleared, so next wrong entry will count
+      expect(cell.hasMistake, isFalse);
       cell.hasMistake = true;
       cell.currentValue = 7;
 
@@ -204,7 +206,6 @@ void main() {
       cell.hasMistake = true;
       cell.currentValue = 3;
 
-      // Correct entry
       cell.currentValue = cell.correctValue;
       cell.hasMistake = false;
 
@@ -214,23 +215,60 @@ void main() {
   });
 
   // ---------------------------------------------------------------------------
+  // GameNotifier tests
+  // ---------------------------------------------------------------------------
+  group('GameNotifier', () {
+    test('formatTime formats seconds correctly', () {
+      expect(GameNotifier.formatTime(0), '00:00');
+      expect(GameNotifier.formatTime(61), '01:01');
+      expect(GameNotifier.formatTime(3600), '60:00');
+    });
+
+    test('starts in idle status', () {
+      final notifier = GameNotifier();
+      expect(notifier.status, GameStatus.idle);
+      notifier.dispose();
+    });
+
+    test('startNewGame sets status to playing', () {
+      final notifier = GameNotifier();
+      notifier.startNewGame(Difficulty.easy);
+      expect(notifier.status, GameStatus.playing);
+      expect(notifier.isPlaying, isTrue);
+      expect(notifier.mistakes, 0);
+      notifier.dispose();
+    });
+
+    test('startNewGame generates a valid 9x9 grid', () {
+      final notifier = GameNotifier();
+      notifier.startNewGame(Difficulty.medium);
+      expect(notifier.grid.length, 9);
+      for (final row in notifier.grid) {
+        expect(row.length, 9);
+      }
+      notifier.dispose();
+    });
+  });
+
+  // ---------------------------------------------------------------------------
   // Widget / smoke tests
   // ---------------------------------------------------------------------------
   group('SudokuApp widget', () {
     testWidgets('app renders without crashing', (WidgetTester tester) async {
       await tester.pumpWidget(const SudokuApp());
-      // Allow async initState (shared_preferences, timer setup) to settle
       await tester.pump(const Duration(milliseconds: 100));
       expect(find.byType(MaterialApp), findsOneWidget);
     });
 
-    testWidgets('game screen displays the app title', (WidgetTester tester) async {
+    testWidgets('game screen displays the app title',
+        (WidgetTester tester) async {
       await tester.pumpWidget(const SudokuApp());
       await tester.pump(const Duration(milliseconds: 100));
       expect(find.text('StojkoDoku'), findsOneWidget);
     });
 
-    testWidgets('difficulty buttons are rendered', (WidgetTester tester) async {
+    testWidgets('difficulty buttons are rendered',
+        (WidgetTester tester) async {
       await tester.pumpWidget(const SudokuApp());
       await tester.pump(const Duration(milliseconds: 100));
       expect(find.text('Easy'), findsOneWidget);
@@ -238,7 +276,8 @@ void main() {
       expect(find.text('Hard'), findsOneWidget);
     });
 
-    testWidgets('number pad displays digits 1–9', (WidgetTester tester) async {
+    testWidgets('number pad displays digits 1–9',
+        (WidgetTester tester) async {
       await tester.pumpWidget(const SudokuApp());
       await tester.pump(const Duration(milliseconds: 100));
       for (int i = 1; i <= 9; i++) {
@@ -246,13 +285,15 @@ void main() {
       }
     });
 
-    testWidgets('leaderboard icon button is present', (WidgetTester tester) async {
+    testWidgets('leaderboard icon button is present',
+        (WidgetTester tester) async {
       await tester.pumpWidget(const SudokuApp());
       await tester.pump(const Duration(milliseconds: 100));
       expect(find.byIcon(Icons.leaderboard_rounded), findsOneWidget);
     });
 
-    testWidgets('Check and Hint action buttons are rendered', (WidgetTester tester) async {
+    testWidgets('Check and Hint action buttons are rendered',
+        (WidgetTester tester) async {
       await tester.pumpWidget(const SudokuApp());
       await tester.pump(const Duration(milliseconds: 100));
       expect(find.text('Check'), findsOneWidget);

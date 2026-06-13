@@ -34,20 +34,21 @@ class GameNotifier extends ChangeNotifier with WidgetsBindingObserver {
   int selectedRow = -1;
   int selectedCol = -1;
   int mistakes = 0;
-  int secondsElapsed = 0;
+  final ValueNotifier<int> secondsElapsed = ValueNotifier<int>(0);
   int hintsUsed = 0;
   GameStatus status = GameStatus.idle;
   bool showConfetti = false;
   bool isLeaderboardEligible = true;
+  bool isUserPaused = false;
 
   final List<Move> _history = [];
 
   Timer? _timer;
   Timer? _confettiTimer;
 
-  bool get isPlaying => status == GameStatus.playing;
+  bool get isPlaying => status == GameStatus.playing && !isUserPaused;
   bool get canUndo => _history.isNotEmpty;
-  bool get canUseHint => hintsUsed < 5;
+  bool get canUseHint => hintsUsed < 5 && !isUserPaused;
 
   // -------------------------------------------------------------------------
   // Game lifecycle
@@ -62,11 +63,12 @@ class GameNotifier extends ChangeNotifier with WidgetsBindingObserver {
     mistakes = 0;
     selectedRow = -1;
     selectedCol = -1;
-    secondsElapsed = 0;
+    secondsElapsed.value = 0;
     hintsUsed = 0;
     status = GameStatus.playing;
     showConfetti = false;
     isLeaderboardEligible = true;
+    isUserPaused = false;
     _history.clear();
 
     final solved = SudokuGenerator.generateCompleted();
@@ -175,6 +177,30 @@ class GameNotifier extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
+  void togglePause() {
+    if (status != GameStatus.playing) return;
+    isUserPaused = !isUserPaused;
+    if (isUserPaused) {
+      _timer?.cancel();
+    } else {
+      _startTimer();
+    }
+    notifyListeners();
+  }
+
+  bool isNumberExhausted(int num) {
+    if (status != GameStatus.playing) return false;
+    int count = 0;
+    for (final row in grid) {
+      for (final cell in row) {
+        if (cell.currentValue == num && cell.currentValue == cell.correctValue) {
+          count++;
+        }
+      }
+    }
+    return count == 9;
+  }
+
   /// Reverts the most recent move.
   void undo() {
     if (!isPlaying || _history.isEmpty) return;
@@ -251,8 +277,7 @@ class GameNotifier extends ChangeNotifier with WidgetsBindingObserver {
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (isPlaying) {
-        secondsElapsed++;
-        notifyListeners();
+        secondsElapsed.value++;
       }
     });
   }
@@ -280,7 +305,7 @@ class GameNotifier extends ChangeNotifier with WidgetsBindingObserver {
     final data = {
       'difficulty': difficulty.name,
       'mistakes': mistakes,
-      'secondsElapsed': secondsElapsed,
+      'secondsElapsed': secondsElapsed.value,
       'hintsUsed': hintsUsed,
       'isLeaderboardEligible': isLeaderboardEligible,
       'grid': grid.map((row) => row.map((c) => c.toJson()).toList()).toList(),
@@ -296,7 +321,7 @@ class GameNotifier extends ChangeNotifier with WidgetsBindingObserver {
         final data = jsonDecode(saved);
         difficulty = Difficulty.values.firstWhere((d) => d.name == data['difficulty']);
         mistakes = data['mistakes'];
-        secondsElapsed = data['secondsElapsed'];
+        secondsElapsed.value = data['secondsElapsed'];
         hintsUsed = data['hintsUsed'] ?? 0;
         isLeaderboardEligible = data['isLeaderboardEligible'] ?? true;
         _history.clear(); // Transient history resets on load

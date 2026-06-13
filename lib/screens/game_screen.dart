@@ -127,7 +127,7 @@ class _SudokuGameScreenState extends State<SudokuGameScreen> {
   // -------------------------------------------------------------------------
 
   void _showWinDialog() async {
-    final elapsed = _notifier.secondsElapsed;
+    final elapsed = _notifier.secondsElapsed.value;
     final difficulty = _notifier.difficulty;
     final eligible = _notifier.isLeaderboardEligible;
     final isTop = eligible ? await LeaderboardService.isTop10(difficulty, elapsed) : false;
@@ -410,15 +410,27 @@ class _SudokuGameScreenState extends State<SudokuGameScreen> {
                 ),
               ]),
               Row(children: [
+                IconButton(
+                  icon: Icon(n.isUserPaused ? Icons.play_arrow_rounded : Icons.pause_rounded, color: AppColors.primaryDark),
+                  onPressed: n.togglePause,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+                const SizedBox(width: 8),
                 const Icon(Icons.timer_outlined,
                     color: Color(0xFFA7F3D0)),
                 const SizedBox(width: 8),
-                Text(
-                  GameNotifier.formatTime(n.secondsElapsed),
-                  style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.primaryDark),
+                ValueListenableBuilder<int>(
+                  valueListenable: n.secondsElapsed,
+                  builder: (context, seconds, _) {
+                    return Text(
+                      GameNotifier.formatTime(seconds),
+                      style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.primaryDark),
+                    );
+                  },
                 ),
               ]),
             ],
@@ -448,18 +460,37 @@ class _SudokuGameScreenState extends State<SudokuGameScreen> {
                 spreadRadius: 5)
           ],
         ),
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: List.generate(
-              9,
-              (r) => Row(
+        child: Stack(
+          children: [
+            Center(
+              child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: List.generate(
-                    9, (c) => _buildCell(n, r, c, cellSize)),
+                  9,
+                  (r) => Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: List.generate(
+                        9, (c) => _buildCell(n, r, c, cellSize)),
+                  ),
+                ),
               ),
             ),
-          ),
+            if (n.isUserPaused)
+              Container(
+                color: Colors.white.withValues(alpha: 0.95),
+                child: Center(
+                  child: Text(
+                    'PAUSED',
+                    style: TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 8,
+                      color: AppColors.primaryDark,
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ),
       );
     });
@@ -564,37 +595,40 @@ class _SudokuGameScreenState extends State<SudokuGameScreen> {
     );
   }
 
-  Widget _buildNumberPad() {
+  Widget _buildNumberPad(GameNotifier n) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       constraints: const BoxConstraints(maxWidth: 400),
       child: Column(
         children: [
-          Row(children: List.generate(5, (i) => _buildPadButton(i + 1))),
+          Row(children: List.generate(5, (i) => _buildPadButton(n, i + 1))),
           const SizedBox(height: 10),
           Row(children: [
-            ...List.generate(4, (i) => _buildPadButton(i + 6)),
-            _buildEraseButton(),
+            ...List.generate(4, (i) => _buildPadButton(n, i + 6)),
+            _buildEraseButton(n),
           ]),
         ],
       ),
     );
   }
 
-  Widget _buildPadButton(int num) {
+  Widget _buildPadButton(GameNotifier n, int num) {
+    final bool isExhausted = n.isNumberExhausted(num);
+    final bool isDisabled = isExhausted || n.isUserPaused;
     return Expanded(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 4.0),
         child: InkWell(
-          onTap: () => _notifier.inputNumber(num),
+          onTap: isDisabled ? null : () => n.inputNumber(num),
           borderRadius: BorderRadius.circular(15),
           child: AspectRatio(
             aspectRatio: 1,
-            child: Container(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: isDisabled ? Colors.grey.shade200 : Colors.white,
                 borderRadius: BorderRadius.circular(15),
-                boxShadow: [
+                boxShadow: isDisabled ? [] : [
                   BoxShadow(
                       color: Colors.purple.withValues(alpha: 0.1),
                       blurRadius: 4,
@@ -607,7 +641,7 @@ class _SudokuGameScreenState extends State<SudokuGameScreen> {
                   style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
-                      color: AppColors.primaryDark),
+                      color: isDisabled ? Colors.grey.shade400 : AppColors.primaryDark),
                 ),
               ),
             ),
@@ -617,20 +651,26 @@ class _SudokuGameScreenState extends State<SudokuGameScreen> {
     );
   }
 
-  Widget _buildEraseButton() {
+  Widget _buildEraseButton(GameNotifier n) {
+    bool isFixed = false;
+    if (n.selectedRow != -1 && n.selectedCol != -1) {
+      isFixed = n.grid[n.selectedRow][n.selectedCol].isFixed;
+    }
+    final bool isDisabled = isFixed || n.isUserPaused;
     return Expanded(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 4.0),
         child: InkWell(
-          onTap: () => _notifier.inputNumber(0),
+          onTap: isDisabled ? null : () => n.inputNumber(0),
           borderRadius: BorderRadius.circular(15),
           child: AspectRatio(
             aspectRatio: 1,
-            child: Container(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
               decoration: BoxDecoration(
-                color: const Color(0xFFF3E8FF),
+                color: isDisabled ? Colors.grey.shade200 : const Color(0xFFF3E8FF),
                 borderRadius: BorderRadius.circular(15),
-                boxShadow: [
+                boxShadow: isDisabled ? [] : [
                   BoxShadow(
                       color: Colors.purple.withValues(alpha: 0.1),
                       blurRadius: 4,
@@ -639,7 +679,7 @@ class _SudokuGameScreenState extends State<SudokuGameScreen> {
               ),
               child: Center(
                 child: Icon(Icons.backspace_outlined,
-                    color: AppColors.primaryDark),
+                    color: isDisabled ? Colors.grey.shade400 : AppColors.primaryDark),
               ),
             ),
           ),
@@ -695,7 +735,7 @@ class _SudokuGameScreenState extends State<SudokuGameScreen> {
                     const SizedBox(height: 20),
                     _buildActionButtons(),
                     const SizedBox(height: 20),
-                    _buildNumberPad(),
+                    _buildNumberPad(notifier),
                     const SizedBox(height: 20),
                   ],
                 ),

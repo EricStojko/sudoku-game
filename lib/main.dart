@@ -5,6 +5,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+// ---------------------------------------------------------------------------
+// Design tokens — single source of truth for all app colours.
+// ---------------------------------------------------------------------------
+class AppColors {
+  AppColors._(); // prevent instantiation
+
+  static const Color primaryPastel = Color(0xFFC4B5FD); // Soft purple
+  static const Color secondaryPastel = Color(0xFFA7F3D0); // Soft mint green
+  static const Color accentPastel = Color(0xFFFBCFE8); // Soft pink
+  static const Color errorPastel = Color(0xFFFDA4AF); // Soft red
+  static const Color fixedCellBg = Color(0xFFF3F4F6); // Soft gray
+  static const Color primaryDark = Color(0xFF6D28D9); // Deep purple for text
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const SudokuApp());
@@ -186,14 +200,6 @@ class SudokuGameScreen extends StatefulWidget {
 }
 
 class _SudokuGameScreenState extends State<SudokuGameScreen> {
-  // Pastel Palette
-  final Color primaryPastel = const Color(0xFFC4B5FD); // Soft purple
-  final Color secondaryPastel = const Color(0xFFA7F3D0); // Soft mint green
-  final Color accentPastel = const Color(0xFFFBCFE8); // Soft pink
-  final Color errorPastel = const Color(0xFFFDA4AF); // Soft red
-  final Color fixedCellBg = const Color(0xFFF3F4F6); // Soft gray
-  final Color primaryDark = const Color(0xFF6D28D9); // Deep purple for text
-
   Difficulty _difficulty = Difficulty.easy;
   late List<List<SudokuCell>> _grid;
   int _selectedRow = -1;
@@ -394,7 +400,7 @@ class _SudokuGameScreenState extends State<SudokuGameScreen> {
         return AlertDialog(
           backgroundColor: const Color(0xFFFDFBFF),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Text("You did it! 🎉", style: TextStyle(color: primaryDark, fontWeight: FontWeight.bold)),
+          title: Text("You did it! 🎉", style: TextStyle(color: AppColors.primaryDark, fontWeight: FontWeight.bold)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -413,7 +419,7 @@ class _SudokuGameScreenState extends State<SudokuGameScreen> {
                       borderRadius: BorderRadius.circular(15),
                     ),
                     focusedBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: primaryDark, width: 2),
+                      borderSide: BorderSide(color: AppColors.primaryDark, width: 2),
                       borderRadius: BorderRadius.circular(15),
                     ),
                   ),
@@ -434,7 +440,7 @@ class _SudokuGameScreenState extends State<SudokuGameScreen> {
                   _showLeaderboard();
                 }
               },
-              child: Text("Continue", style: TextStyle(fontSize: 16, color: primaryDark, fontWeight: FontWeight.bold)),
+              child: Text("Continue", style: TextStyle(fontSize: 16, color: AppColors.primaryDark, fontWeight: FontWeight.bold)),
             )
           ],
         );
@@ -458,7 +464,7 @@ class _SudokuGameScreenState extends State<SudokuGameScreen> {
                 Navigator.pop(context);
                 _startNewGame(_difficulty);
               },
-              child: Text("Try Again", style: TextStyle(fontSize: 16, color: primaryDark)),
+              child: Text("Try Again", style: TextStyle(fontSize: 16, color: AppColors.primaryDark)),
             )
           ],
         );
@@ -484,7 +490,7 @@ class _SudokuGameScreenState extends State<SudokuGameScreen> {
           title: Center(
             child: Text(
               "Top 10 - ${_difficulty.name.toUpperCase()}",
-              style: TextStyle(color: primaryDark, fontWeight: FontWeight.bold),
+              style: TextStyle(color: AppColors.primaryDark, fontWeight: FontWeight.bold),
             ),
           ),
           content: SizedBox(
@@ -498,11 +504,11 @@ class _SudokuGameScreenState extends State<SudokuGameScreen> {
                       var entry = entries[index];
                       return ListTile(
                         leading: CircleAvatar(
-                          backgroundColor: accentPastel,
-                          child: Text("${index + 1}", style: TextStyle(color: primaryDark, fontWeight: FontWeight.bold)),
+                          backgroundColor: AppColors.accentPastel,
+                          child: Text("${index + 1}", style: TextStyle(color: AppColors.primaryDark, fontWeight: FontWeight.bold)),
                         ),
                         title: Text(entry.name, style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1F2937))),
-                        trailing: Text(_formatTime(entry.timeInSeconds), style: TextStyle(fontWeight: FontWeight.bold, color: primaryDark)),
+                        trailing: Text(_formatTime(entry.timeInSeconds), style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primaryDark)),
                         subtitle: Text(entry.date, style: const TextStyle(fontSize: 12)),
                       );
                     },
@@ -514,7 +520,7 @@ class _SudokuGameScreenState extends State<SudokuGameScreen> {
                 Navigator.pop(context);
                 _startNewGame(_difficulty);
               },
-              child: Text("Play Again", style: TextStyle(fontSize: 16, color: primaryDark)),
+              child: Text("Play Again", style: TextStyle(fontSize: 16, color: AppColors.primaryDark)),
             ),
             TextButton(
               onPressed: () => Navigator.pop(context),
@@ -548,7 +554,7 @@ class _SudokuGameScreenState extends State<SudokuGameScreen> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     decoration: BoxDecoration(
-                      color: isSelected ? primaryPastel : Colors.transparent,
+                      color: isSelected ? AppColors.primaryPastel : Colors.transparent,
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Center(
@@ -579,7 +585,7 @@ class _SudokuGameScreenState extends State<SudokuGameScreen> {
                   const SizedBox(width: 8),
                   Text(
                     "Mistakes: $_mistakes / 3",
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: primaryDark),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.primaryDark),
                   ),
                 ],
               ),
@@ -589,7 +595,7 @@ class _SudokuGameScreenState extends State<SudokuGameScreen> {
                   const SizedBox(width: 8),
                   Text(
                     _formatTime(_secondsElapsed),
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: primaryDark),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.primaryDark),
                   ),
                 ],
               ),
@@ -647,13 +653,13 @@ class _SudokuGameScreenState extends State<SudokuGameScreen> {
 
     Color bgColor = Colors.white;
     if (isSelected) {
-      bgColor = accentPastel;
+      bgColor = AppColors.accentPastel;
     } else if (cell.isErrorHighlight) {
-      bgColor = errorPastel;
+      bgColor = AppColors.errorPastel;
     } else if (isSameValue) {
-      bgColor = primaryPastel.withOpacity(0.4);
+      bgColor = AppColors.primaryPastel.withOpacity(0.4);
     } else if (cell.isFixed) {
-      bgColor = fixedCellBg;
+      bgColor = AppColors.fixedCellBg;
     }
 
     return GestureDetector(
@@ -677,7 +683,7 @@ class _SudokuGameScreenState extends State<SudokuGameScreen> {
             style: TextStyle(
               fontSize: size * 0.5,
               fontWeight: cell.isFixed ? FontWeight.bold : FontWeight.w600,
-              color: cell.isFixed ? const Color(0xFF1F2937) : primaryDark,
+              color: cell.isFixed ? const Color(0xFF1F2937) : AppColors.primaryDark,
             ),
           ),
         ),
@@ -695,7 +701,7 @@ class _SudokuGameScreenState extends State<SudokuGameScreen> {
           label: const Text("Check"),
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.white,
-            foregroundColor: primaryDark,
+            foregroundColor: AppColors.primaryDark,
             shape: const StadiumBorder(),
             elevation: 2,
           ),
@@ -757,7 +763,7 @@ class _SudokuGameScreenState extends State<SudokuGameScreen> {
               child: Center(
                 child: Text(
                   num.toString(),
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: primaryDark),
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.primaryDark),
                 ),
               ),
             ),
@@ -785,7 +791,7 @@ class _SudokuGameScreenState extends State<SudokuGameScreen> {
                 ],
               ),
               child: Center(
-                child: Icon(Icons.backspace_outlined, color: primaryDark),
+                child: Icon(Icons.backspace_outlined, color: AppColors.primaryDark),
               ),
             ),
           ),
@@ -881,7 +887,7 @@ class _SudokuGameScreenState extends State<SudokuGameScreen> {
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           elevation: 0,
-          title: Text("StojkoDoku", style: TextStyle(color: primaryDark, fontWeight: FontWeight.bold, fontSize: 24)),
+          title: Text("StojkoDoku", style: TextStyle(color: AppColors.primaryDark, fontWeight: FontWeight.bold, fontSize: 24)),
           centerTitle: true,
           actions: [
             IconButton(

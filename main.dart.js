@@ -80289,7 +80289,7 @@ l.r=m.f.gu()
 k=l.dT()
 o.drawCircle(m.a+m.c*q,m.b+m.d*q+p,m.e,k)
 k.delete()}},
-em(a){return!0}}
+em(a){return a.c!==this.c}}
 A.vN.prototype={}
 A.Er.prototype={
 l(){var s=this,r=s.bu$

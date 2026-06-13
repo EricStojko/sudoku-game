@@ -1016,7 +1016,8 @@ class ConfettiPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+  bool shouldRepaint(covariant ConfettiPainter oldDelegate) =>
+      oldDelegate.progress != progress;
 }
 
 class ConfettiParticle {

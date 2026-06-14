@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/difficulty.dart';
@@ -17,12 +18,18 @@ enum GameStatus { idle, playing, won, gameOver }
 class GameNotifier extends ChangeNotifier with WidgetsBindingObserver {
   GameNotifier() {
     WidgetsBinding.instance.addObserver(this);
+    // Initialize with a blank dummy grid to prevent LateInitializationErrors during async generation
+    grid = List.generate(
+      9,
+      (r) => List.generate(
+        9,
+        (c) => SudokuCell(correctValue: 0, currentValue: 0, isFixed: false),
+      ),
+    );
   }
 
   void initGame() {
-    // Start a default game synchronously so the UI has a valid grid immediately.
     startNewGame(Difficulty.easy);
-    // Attempt to load a saved game and overwrite the default game.
     _loadGame();
   }
   // -------------------------------------------------------------------------
@@ -31,6 +38,7 @@ class GameNotifier extends ChangeNotifier with WidgetsBindingObserver {
 
   Difficulty difficulty = Difficulty.easy;
   late List<List<SudokuCell>> grid;
+  bool isGenerating = false;
   int selectedRow = -1;
   int selectedCol = -1;
   int mistakes = 0;
@@ -54,10 +62,10 @@ class GameNotifier extends ChangeNotifier with WidgetsBindingObserver {
   // Game lifecycle
   // -------------------------------------------------------------------------
 
-  /// Starts a fresh game with [diff] difficulty. Cancels any running timer.
-  void startNewGame(Difficulty diff) {
+  void startNewGame(Difficulty diff) async {
     _timer?.cancel();
     _confettiTimer?.cancel();
+    _checkTimer?.cancel();
 
     difficulty = diff;
     mistakes = 0;
@@ -71,23 +79,42 @@ class GameNotifier extends ChangeNotifier with WidgetsBindingObserver {
     isUserPaused = false;
     _history.clear();
 
-    final solved = SudokuGenerator.generateCompleted();
-    final puzzle = SudokuGenerator.generatePuzzle(solved, diff);
+    isGenerating = true;
+    notifyListeners();
 
-    grid = List.generate(
-      9,
-      (r) => List.generate(
+    try {
+      final boardData = await compute(generateSudokuIsolateTask, diff);
+      grid = List.generate(
         9,
-        (c) => SudokuCell(
-          correctValue: solved[r][c],
-          currentValue: puzzle[r][c],
-          isFixed: puzzle[r][c] != 0,
+        (r) => List.generate(
+          9,
+          (c) => SudokuCell(
+            correctValue: boardData.solved[r][c],
+            currentValue: boardData.puzzle[r][c],
+            isFixed: boardData.puzzle[r][c] != 0,
+          ),
         ),
-      ),
-    );
+      );
+    } catch (_) {
+      // Fallback if Isolate/compute fails (e.g., in unit tests or older web runtimes)
+      final solved = SudokuGenerator.generateCompleted();
+      final puzzle = SudokuGenerator.generatePuzzle(solved, diff);
+      grid = List.generate(
+        9,
+        (r) => List.generate(
+          9,
+          (c) => SudokuCell(
+            correctValue: solved[r][c],
+            currentValue: puzzle[r][c],
+            isFixed: puzzle[r][c] != 0,
+          ),
+        ),
+      );
+    } finally {
+      isGenerating = false;
+    }
 
     _startTimer();
-
     notifyListeners();
   }
 
@@ -218,9 +245,12 @@ class GameNotifier extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
+  Timer? _checkTimer;
+
   /// Highlights all incorrect non-empty cells for 2 seconds.
   void useCheck() {
     if (!isPlaying) return;
+    _checkTimer?.cancel();
     for (final row in grid) {
       for (final cell in row) {
         if (!cell.isFixed &&
@@ -232,7 +262,7 @@ class GameNotifier extends ChangeNotifier with WidgetsBindingObserver {
     }
     notifyListeners();
 
-    Future.delayed(const Duration(seconds: 2), () {
+    _checkTimer = Timer(const Duration(seconds: 2), () {
       for (final row in grid) {
         for (final cell in row) {
           cell.isErrorHighlight = false;
@@ -354,11 +384,22 @@ class GameNotifier extends ChangeNotifier with WidgetsBindingObserver {
     _saveGame(); // Clears the save because status != playing
   }
 
+  bool _isDisposed = false;
+
+  @override
+  void notifyListeners() {
+    if (!_isDisposed) {
+      super.notifyListeners();
+    }
+  }
+
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
+    _isDisposed = true;
     _timer?.cancel();
     _confettiTimer?.cancel();
+    _checkTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 }

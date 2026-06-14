@@ -154,4 +154,22 @@ class SudokuGenerator {
     }
     return true;
   }
+
+  /// Entry point for running generation on a background Isolate.
+  static SudokuBoardData generate(Difficulty difficulty) {
+    final solved = generateCompleted();
+    final puzzle = generatePuzzle(solved, difficulty);
+    return SudokuBoardData(solved: solved, puzzle: puzzle);
+  }
+}
+
+class SudokuBoardData {
+  final List<List<int>> solved;
+  final List<List<int>> puzzle;
+  const SudokuBoardData({required this.solved, required this.puzzle});
+}
+
+/// Top-level task for compute Isolate execution
+SudokuBoardData generateSudokuIsolateTask(Difficulty difficulty) {
+  return SudokuGenerator.generate(difficulty);
 }

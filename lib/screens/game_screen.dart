@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../app_colors.dart';
 import '../logic/game_notifier.dart';
 import '../models/difficulty.dart';
+import '../models/leaderboard_entry.dart';
 import '../services/leaderboard_service.dart';
 import '../widgets/confetti_overlay.dart';
 import '../widgets/animated_sudoku_cell.dart';
@@ -17,26 +18,39 @@ class SudokuGameScreen extends StatefulWidget {
 }
 
 class _SudokuGameScreenState extends State<SudokuGameScreen> {
-  // Obtained once from the Provider tree in didChangeDependencies.
-  // Kept as a field so non-build methods (keyboard handler, dialogs) can
-  // access the notifier without needing a BuildContext.
-  late final GameNotifier _notifier;
-  bool _notifierBound = false;
+  GameNotifier? _notifierRef;
+  GameNotifier get _notifier => _notifierRef!;
+
+  final FocusNode _boardFocusNode = FocusNode();
+  bool _isBoardFocused = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _boardFocusNode.addListener(() {
+      if (mounted) {
+        setState(() {
+          _isBoardFocused = _boardFocusNode.hasFocus;
+        });
+      }
+    });
+  }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (!_notifierBound) {
-      // context.read — we only need the reference once, not a rebuild trigger.
-      _notifier = context.read<GameNotifier>();
-      _notifier.addListener(_handleStatusChange);
-      _notifierBound = true;
+    final newNotifier = Provider.of<GameNotifier>(context, listen: false);
+    if (newNotifier != _notifierRef) {
+      _notifierRef?.removeListener(_handleStatusChange);
+      _notifierRef = newNotifier;
+      _notifierRef!.addListener(_handleStatusChange);
     }
   }
 
   @override
   void dispose() {
-    _notifier.removeListener(_handleStatusChange);
+    _notifierRef?.removeListener(_handleStatusChange);
+    _boardFocusNode.dispose();
     super.dispose();
   }
 
@@ -262,86 +276,118 @@ class _SudokuGameScreenState extends State<SudokuGameScreen> {
     );
   }
 
-  void _showLeaderboard() async {
-    final results = await Future.wait([
-      LeaderboardService.fetchEntries(Difficulty.easy),
-      LeaderboardService.fetchEntries(Difficulty.medium),
-      LeaderboardService.fetchEntries(Difficulty.hard),
-    ]);
-    if (!mounted) return;
-
+  void _showLeaderboard() {
     showDialog(
       context: context,
       builder: (context) {
-        return DefaultTabController(
-          length: 3,
-          initialIndex: _notifier.difficulty.index,
-          child: AlertDialog(
-            backgroundColor: const Color(0xFFFDFBFF),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            contentPadding: const EdgeInsets.only(top: 20),
-            title: Center(
-              child: Text(
-                'Leaderboards',
-                style: TextStyle(color: AppColors.primaryDark, fontWeight: FontWeight.bold),
-              ),
-            ),
-            content: SizedBox(
-              width: double.maxFinite,
-              height: 400,
-              child: Column(
-                children: [
-                  TabBar(
-                    labelColor: AppColors.primaryDark,
-                    unselectedLabelColor: Colors.grey,
-                    indicatorColor: AppColors.primaryDark,
-                    tabs: const [
-                      Tab(text: 'EASY'),
-                      Tab(text: 'MEDIUM'),
-                      Tab(text: 'HARD'),
+        return FutureBuilder<List<List<LeaderboardEntry>>>(
+          future: Future.wait([
+            LeaderboardService.fetchEntries(Difficulty.easy),
+            LeaderboardService.fetchEntries(Difficulty.medium),
+            LeaderboardService.fetchEntries(Difficulty.hard),
+          ]),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return AlertDialog(
+                backgroundColor: const Color(0xFFFDFBFF),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                content: SizedBox(
+                  width: double.maxFinite,
+                  height: 200,
+                  child: Center(
+                    child: CircularProgressIndicator(color: AppColors.primaryDark),
+                  ),
+                ),
+              );
+            }
+
+            if (snapshot.hasError || !snapshot.hasData) {
+              return AlertDialog(
+                backgroundColor: const Color(0xFFFDFBFF),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                title: const Text('Error'),
+                content: const Text('Failed to load leaderboard data.'),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Close'),
+                  ),
+                ],
+              );
+            }
+
+            final results = snapshot.data!;
+            return DefaultTabController(
+              length: 3,
+              initialIndex: _notifier.difficulty.index,
+              child: AlertDialog(
+                backgroundColor: const Color(0xFFFDFBFF),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                contentPadding: const EdgeInsets.only(top: 20),
+                title: Center(
+                  child: Text(
+                    'Leaderboards',
+                    style: TextStyle(color: AppColors.primaryDark, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                content: SizedBox(
+                  width: double.maxFinite,
+                  height: 400,
+                  child: Column(
+                    children: [
+                      TabBar(
+                        labelColor: AppColors.primaryDark,
+                        unselectedLabelColor: Colors.grey,
+                        indicatorColor: AppColors.primaryDark,
+                        tabs: const [
+                          Tab(text: 'EASY'),
+                          Tab(text: 'MEDIUM'),
+                          Tab(text: 'HARD'),
+                        ],
+                      ),
+                      Expanded(
+                        child: TabBarView(
+                          children: results.map((entries) {
+                            if (entries.isEmpty) {
+                              return const Center(child: Text('No scores yet!', style: TextStyle(color: Colors.grey)));
+                            }
+                            return ListView.builder(
+                              itemCount: entries.length,
+                              itemBuilder: (context, index) {
+                                final entry = entries[index];
+                                return ListTile(
+                                  leading: CircleAvatar(
+                                    backgroundColor: AppColors.accentPastel,
+                                    child: Text('${index + 1}', style: TextStyle(color: AppColors.primaryDark, fontWeight: FontWeight.bold)),
+                                  ),
+                                  title: Text(entry.name, style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1F2937))),
+                                  trailing: Text(GameNotifier.formatTime(entry.timeInSeconds), style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primaryDark)),
+                                  subtitle: Text(entry.date, style: const TextStyle(fontSize: 12)),
+                                );
+                              },
+                            );
+                          }).toList(),
+                        ),
+                      ),
                     ],
                   ),
-                  Expanded(
-                    child: TabBarView(
-                      children: results.map((entries) {
-                        if (entries.isEmpty) {
-                          return const Center(child: Text('No scores yet!', style: TextStyle(color: Colors.grey)));
-                        }
-                        return ListView.builder(
-                          itemCount: entries.length,
-                          itemBuilder: (context, index) {
-                            final entry = entries[index];
-                            return ListTile(
-                              leading: CircleAvatar(
-                                backgroundColor: AppColors.accentPastel,
-                                child: Text('${index + 1}', style: TextStyle(color: AppColors.primaryDark, fontWeight: FontWeight.bold)),
-                              ),
-                              title: Text(entry.name, style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1F2937))),
-                              trailing: Text(GameNotifier.formatTime(entry.timeInSeconds), style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primaryDark)),
-                              subtitle: Text(entry.date, style: const TextStyle(fontSize: 12)),
-                            );
-                          },
-                        );
-                      }).toList(),
-                    ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _notifier.startNewGame(_notifier.difficulty);
+                    },
+                    child: Text('Play Again', style: TextStyle(fontSize: 16, color: AppColors.primaryDark)),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Close', style: TextStyle(fontSize: 16, color: Colors.grey)),
                   ),
                 ],
               ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  _notifier.startNewGame(_notifier.difficulty);
-                },
-                child: Text('Play Again', style: TextStyle(fontSize: 16, color: AppColors.primaryDark)),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Close', style: TextStyle(fontSize: 16, color: Colors.grey)),
-              ),
-            ],
-          ),
+            );
+          },
         );
       },
     );
@@ -446,106 +492,152 @@ class _SudokuGameScreenState extends State<SudokuGameScreen> {
   }
 
   Widget _buildGrid() {
-    return LayoutBuilder(builder: (context, constraints) {
-      double boardSize =
-          min(constraints.maxWidth, constraints.maxHeight) - 32;
-      if (boardSize > 500) boardSize = 500;
-      final cellSize = (boardSize - 7) / 9;
+    return Selector<GameNotifier, bool>(
+      selector: (_, n) => n.isGenerating,
+      builder: (context, isGenerating, child) {
+        return LayoutBuilder(builder: (context, constraints) {
+          double boardSize =
+              min(constraints.maxWidth, constraints.maxHeight) - 32;
+          if (boardSize > 500) boardSize = 500;
+          final cellSize = (boardSize - 7) / 9;
 
-      return Container(
-        width: boardSize,
-        height: boardSize,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border.all(color: Colors.purple.shade300, width: 3),
-          boxShadow: [
-            BoxShadow(
-                color: Colors.purple.withValues(alpha: 0.1),
-                blurRadius: 10,
-                spreadRadius: 5)
-          ],
-        ),
-        child: Stack(
-          children: [
-            Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: List.generate(
-                  9,
-                  (r) => Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: List.generate(
-                        9, (c) => AnimatedSudokuCell(row: r, col: c, size: cellSize)),
-                  ),
+          if (isGenerating) {
+            return Container(
+              width: boardSize,
+              height: boardSize,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                border: Border.all(color: Colors.purple.shade300, width: 3),
+              ),
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CircularProgressIndicator(color: AppColors.primaryDark),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Generating Board...',
+                      style: TextStyle(
+                        color: AppColors.primaryDark,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ],
                 ),
               ),
+            );
+          }
+
+          return Container(
+            width: boardSize,
+            height: boardSize,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border.all(
+                color: _isBoardFocused ? AppColors.primaryDark : Colors.purple.shade300,
+                width: 3,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: _isBoardFocused
+                      ? AppColors.primaryDark.withValues(alpha: 0.25)
+                      : Colors.purple.withValues(alpha: 0.1),
+                  blurRadius: 10,
+                  spreadRadius: 5,
+                )
+              ],
             ),
-            Selector<GameNotifier, bool>(
-              selector: (_, n) => n.isUserPaused,
-              builder: (context, isUserPaused, child) {
-                if (!isUserPaused) return const SizedBox.shrink();
-                return Container(
-                  color: Colors.white.withValues(alpha: 0.95),
-                  child: Center(
-                    child: Text(
-                      'PAUSED',
-                      style: TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 8,
-                        color: AppColors.primaryDark,
+            child: Stack(
+              children: [
+                Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: List.generate(
+                      9,
+                      (r) => Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: List.generate(
+                          9,
+                          (c) => AnimatedSudokuCell(row: r, col: c, size: cellSize),
+                        ),
                       ),
                     ),
                   ),
-                );
-              },
+                ),
+                Selector<GameNotifier, bool>(
+                  selector: (_, n) => n.isUserPaused,
+                  builder: (context, isUserPaused, child) {
+                    if (!isUserPaused) return const SizedBox.shrink();
+                    return Container(
+                      color: Colors.white.withValues(alpha: 0.95),
+                      child: Center(
+                        child: Text(
+                          'PAUSED',
+                          style: TextStyle(
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 8,
+                            color: AppColors.primaryDark,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
             ),
-          ],
-        ),
-      );
-    });
+          );
+        });
+      },
+    );
   }
 
   Widget _buildActionButtons() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        ElevatedButton.icon(
-          onPressed: _notifier.canUndo ? _notifier.undo : null,
-          icon: const Icon(Icons.undo),
-          label: const Text('Undo'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.white,
-            foregroundColor: AppColors.primaryDark,
-            shape: const StadiumBorder(),
-            elevation: 2,
-          ),
-        ),
-        const SizedBox(width: 10),
-        ElevatedButton.icon(
-          onPressed: _notifier.useCheck,
-          icon: const Icon(Icons.check_circle_outline),
-          label: const Text('Check'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.white,
-            foregroundColor: AppColors.primaryDark,
-            shape: const StadiumBorder(),
-            elevation: 2,
-          ),
-        ),
-        const SizedBox(width: 10),
-        ElevatedButton.icon(
-          onPressed: _notifier.canUseHint ? _notifier.useHint : null,
-          icon: const Icon(Icons.lightbulb_outline),
-          label: Text('Hint (${5 - _notifier.hintsUsed})'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.white,
-            foregroundColor: Colors.orange.shade700,
-            shape: const StadiumBorder(),
-            elevation: 2,
-          ),
-        ),
-      ],
+    return Consumer<GameNotifier>(
+      builder: (context, n, _) {
+        final bool isPausedOrOver = n.isUserPaused || n.status != GameStatus.playing;
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            ElevatedButton.icon(
+              onPressed: n.canUndo && !isPausedOrOver ? n.undo : null,
+              icon: const Icon(Icons.undo),
+              label: const Text('Undo'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: AppColors.primaryDark,
+                shape: const StadiumBorder(),
+                elevation: 2,
+              ),
+            ),
+            const SizedBox(width: 10),
+            ElevatedButton.icon(
+              onPressed: !isPausedOrOver ? n.useCheck : null,
+              icon: const Icon(Icons.check_circle_outline),
+              label: const Text('Check'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: AppColors.primaryDark,
+                shape: const StadiumBorder(),
+                elevation: 2,
+              ),
+            ),
+            const SizedBox(width: 10),
+            ElevatedButton.icon(
+              onPressed: n.canUseHint && !isPausedOrOver ? n.useHint : null,
+              icon: const Icon(Icons.lightbulb_outline),
+              label: Text('Hint (${5 - n.hintsUsed})'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: Colors.orange.shade700,
+                shape: const StadiumBorder(),
+                elevation: 2,
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -653,6 +745,7 @@ class _SudokuGameScreenState extends State<SudokuGameScreen> {
   @override
   Widget build(BuildContext context) {
     return Focus(
+      focusNode: _boardFocusNode,
       autofocus: true,
       onKeyEvent: _handleKeyEvent,
       child: Selector<GameNotifier, bool>(

@@ -16,13 +16,21 @@ class LeaderboardService {
   static Future<List<LeaderboardEntry>> fetchEntries(
     Difficulty difficulty,
   ) async {
-    final prefs = await SharedPreferences.getInstance();
-    final records = prefs.getStringList(_key(difficulty)) ?? [];
-    final entries = records
-        .map((e) => LeaderboardEntry.fromJson(jsonDecode(e)))
-        .toList()
-      ..sort((a, b) => a.timeInSeconds.compareTo(b.timeInSeconds));
-    return entries;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final records = prefs.getStringList(_key(difficulty)) ?? [];
+      final entries = <LeaderboardEntry>[];
+      for (final r in records) {
+        try {
+          entries.add(LeaderboardEntry.fromJson(jsonDecode(r)));
+        } catch (_) {
+          // Skip corrupted record
+        }
+      }
+      return entries..sort((a, b) => a.timeInSeconds.compareTo(b.timeInSeconds));
+    } catch (_) {
+      return [];
+    }
   }
 
   /// Returns `true` if [timeInSeconds] would place in the top 10 for
@@ -31,16 +39,13 @@ class LeaderboardService {
     Difficulty difficulty,
     int timeInSeconds,
   ) async {
-    final prefs = await SharedPreferences.getInstance();
-    final records = prefs.getStringList(_key(difficulty)) ?? [];
-    if (records.length < 10) return true;
-
-    final entries = records
-        .map((e) => LeaderboardEntry.fromJson(jsonDecode(e)))
-        .toList()
-      ..sort((a, b) => a.timeInSeconds.compareTo(b.timeInSeconds));
-
-    return timeInSeconds < entries.last.timeInSeconds;
+    try {
+      final entries = await fetchEntries(difficulty);
+      if (entries.length < 10) return true;
+      return timeInSeconds < entries.last.timeInSeconds;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Saves a score for [difficulty]. Keeps only the top 10 entries.
@@ -49,25 +54,25 @@ class LeaderboardService {
     String name,
     int timeInSeconds,
   ) async {
-    final prefs = await SharedPreferences.getInstance();
-    final key = _key(difficulty);
-    final records = prefs.getStringList(key) ?? [];
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = _key(difficulty);
+      var entries = await fetchEntries(difficulty);
 
-    var entries = records
-        .map((e) => LeaderboardEntry.fromJson(jsonDecode(e)))
-        .toList();
+      entries.add(LeaderboardEntry(
+        name,
+        timeInSeconds,
+        DateTime.now().toIso8601String().split('T').first,
+      ));
+      entries.sort((a, b) => a.timeInSeconds.compareTo(b.timeInSeconds));
+      if (entries.length > 10) entries = entries.sublist(0, 10);
 
-    entries.add(LeaderboardEntry(
-      name,
-      timeInSeconds,
-      DateTime.now().toIso8601String().split('T').first,
-    ));
-    entries.sort((a, b) => a.timeInSeconds.compareTo(b.timeInSeconds));
-    if (entries.length > 10) entries = entries.sublist(0, 10);
-
-    await prefs.setStringList(
-      key,
-      entries.map((e) => jsonEncode(e.toJson())).toList(),
-    );
+      await prefs.setStringList(
+        key,
+        entries.map((e) => jsonEncode(e.toJson())).toList(),
+      );
+    } catch (_) {
+      // Gracefully swallow persistence failures in production
+    }
   }
 }

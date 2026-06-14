@@ -31,7 +31,7 @@ class _ConfettiOverlayState extends State<ConfettiOverlay>
     super.initState();
     _ctrl = AnimationController(
         vsync: this, duration: const Duration(seconds: 4));
-    _ctrl.addListener(() => setState(() {}));
+    // REMOVED: _ctrl.addListener(() => setState(() {})); to avoid rebuilding the entire stack.
   }
 
   @override
@@ -44,6 +44,14 @@ class _ConfettiOverlayState extends State<ConfettiOverlay>
   }
 
   void _generateParticles(double width) {
+    final pastelColors = [
+      const Color(0xFFC4B5FD), // Soft purple
+      const Color(0xFFA7F3D0), // Soft mint green
+      const Color(0xFFFBCFE8), // Soft pink
+      const Color(0xFFFDA4AF), // Soft red
+      const Color(0xFFFDE047), // Soft yellow
+      const Color(0xFF93C5FD), // Soft blue
+    ];
     _particles = List.generate(150, (_) {
       return ConfettiParticle(
         x: _rand.nextDouble() * width,
@@ -51,7 +59,7 @@ class _ConfettiOverlayState extends State<ConfettiOverlay>
         dx: _rand.nextDouble() * 200 - 100,
         dy: _rand.nextDouble() * 400 + 200,
         size: _rand.nextDouble() * 6 + 4,
-        color: Colors.primaries[_rand.nextInt(Colors.primaries.length)],
+        color: pastelColors[_rand.nextInt(pastelColors.length)],
         shape: ConfettiShape.values[_rand.nextInt(ConfettiShape.values.length)],
       );
     });
@@ -67,16 +75,23 @@ class _ConfettiOverlayState extends State<ConfettiOverlay>
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        widget.child,
-        if (widget.showConfetti && _ctrl.isAnimating)
+        widget.child, // The rest of the app - never rebuilt by the confetti ticker
+        if (widget.showConfetti)
           Positioned.fill(
             child: IgnorePointer(
               child: LayoutBuilder(builder: (context, constraints) {
                 if (_lastWidth != constraints.maxWidth) {
                   _lastWidth = constraints.maxWidth;
+                  _generateParticles(_lastWidth);
                 }
-                return CustomPaint(
-                  painter: ConfettiPainter(_particles, _ctrl.value),
+                return AnimatedBuilder(
+                  animation: _ctrl,
+                  builder: (context, child) {
+                    if (!_ctrl.isAnimating) return const SizedBox.shrink();
+                    return CustomPaint(
+                      painter: ConfettiPainter(_particles, _ctrl.value),
+                    );
+                  },
                 );
               }),
             ),

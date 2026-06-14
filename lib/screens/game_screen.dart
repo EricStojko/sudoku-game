@@ -7,6 +7,7 @@ import '../logic/game_notifier.dart';
 import '../models/difficulty.dart';
 import '../services/leaderboard_service.dart';
 import '../widgets/confetti_overlay.dart';
+import '../widgets/animated_sudoku_cell.dart';
 
 class SudokuGameScreen extends StatefulWidget {
   const SudokuGameScreen({super.key});
@@ -350,97 +351,101 @@ class _SudokuGameScreenState extends State<SudokuGameScreen> {
   // UI Builders
   // -------------------------------------------------------------------------
 
-  Widget _buildTopControls(GameNotifier n) {
-    return Column(
-      children: [
-        Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16),
-          decoration: BoxDecoration(
-            color: Colors.purple.shade50,
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: Difficulty.values.map((d) {
-              final isSelected = n.difficulty == d;
-              return Expanded(
-                child: GestureDetector(
-                  onTap: () => _notifier.startNewGame(d),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? AppColors.primaryPastel
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Center(
-                      child: Text(
-                        d.name[0].toUpperCase() + d.name.substring(1),
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
+  Widget _buildTopControls() {
+    return Consumer<GameNotifier>(
+      builder: (context, n, _) {
+        return Column(
+          children: [
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                color: Colors.purple.shade50,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: Difficulty.values.map((d) {
+                  final isSelected = n.difficulty == d;
+                  return Expanded(
+                    child: GestureDetector(
+                      onTap: () => _notifier.startNewGame(d),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
                           color: isSelected
-                              ? Colors.white
-                              : Colors.purple.shade300,
+                              ? AppColors.primaryPastel
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Center(
+                          child: Text(
+                            d.name[0].toUpperCase() + d.name.substring(1),
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: isSelected
+                                  ? Colors.white
+                                  : Colors.purple.shade300,
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-        ),
-        const SizedBox(height: 16),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 32),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(children: [
-                const Icon(Icons.error_outline,
-                    color: Color(0xFFFDA4AF)),
-                const SizedBox(width: 8),
-                Text(
-                  'Mistakes: ${n.mistakes} / 3',
-                  style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.primaryDark),
-                ),
-              ]),
-              Row(children: [
-                IconButton(
-                  icon: Icon(n.isUserPaused ? Icons.play_arrow_rounded : Icons.pause_rounded, color: AppColors.primaryDark),
-                  onPressed: n.togglePause,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                ),
-                const SizedBox(width: 8),
-                const Icon(Icons.timer_outlined,
-                    color: Color(0xFFA7F3D0)),
-                const SizedBox(width: 8),
-                ValueListenableBuilder<int>(
-                  valueListenable: n.secondsElapsed,
-                  builder: (context, seconds, _) {
-                    return Text(
-                      GameNotifier.formatTime(seconds),
+                  );
+                }).toList(),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(children: [
+                    const Icon(Icons.error_outline,
+                        color: Color(0xFFFDA4AF)),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Mistakes: ${n.mistakes} / 3',
                       style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
                           color: AppColors.primaryDark),
-                    );
-                  },
-                ),
-              ]),
-            ],
-          ),
-        ),
-      ],
+                    ),
+                  ]),
+                  Row(children: [
+                    IconButton(
+                      icon: Icon(n.isUserPaused ? Icons.play_arrow_rounded : Icons.pause_rounded, color: AppColors.primaryDark),
+                      onPressed: n.togglePause,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                    const SizedBox(width: 8),
+                    const Icon(Icons.timer_outlined,
+                        color: Color(0xFFA7F3D0)),
+                    const SizedBox(width: 8),
+                    ValueListenableBuilder<int>(
+                      valueListenable: n.secondsElapsed,
+                      builder: (context, seconds, _) {
+                        return Text(
+                          GameNotifier.formatTime(seconds),
+                          style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.primaryDark),
+                        );
+                      },
+                    ),
+                  ]),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
-  Widget _buildGrid(GameNotifier n) {
+  Widget _buildGrid() {
     return LayoutBuilder(builder: (context, constraints) {
       double boardSize =
           min(constraints.maxWidth, constraints.maxHeight) - 32;
@@ -470,86 +475,35 @@ class _SudokuGameScreenState extends State<SudokuGameScreen> {
                   (r) => Row(
                     mainAxisSize: MainAxisSize.min,
                     children: List.generate(
-                        9, (c) => _buildCell(n, r, c, cellSize)),
+                        9, (c) => AnimatedSudokuCell(row: r, col: c, size: cellSize)),
                   ),
                 ),
               ),
             ),
-            if (n.isUserPaused)
-              Container(
-                color: Colors.white.withValues(alpha: 0.95),
-                child: Center(
-                  child: Text(
-                    'PAUSED',
-                    style: TextStyle(
-                      fontSize: 32,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 8,
-                      color: AppColors.primaryDark,
+            Selector<GameNotifier, bool>(
+              selector: (_, n) => n.isUserPaused,
+              builder: (context, isUserPaused, child) {
+                if (!isUserPaused) return const SizedBox.shrink();
+                return Container(
+                  color: Colors.white.withValues(alpha: 0.95),
+                  child: Center(
+                    child: Text(
+                      'PAUSED',
+                      style: TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 8,
+                        color: AppColors.primaryDark,
+                      ),
                     ),
                   ),
-                ),
-              ),
+                );
+              },
+            ),
           ],
         ),
       );
     });
-  }
-
-  Widget _buildCell(GameNotifier n, int r, int c, double size) {
-    final cell = n.grid[r][c];
-    final isSelected = r == n.selectedRow && c == n.selectedCol;
-
-    bool isSameValue = false;
-    if (n.selectedRow != -1 && n.selectedCol != -1) {
-      final selValue = n.grid[n.selectedRow][n.selectedCol].currentValue;
-      if (selValue != 0 && cell.currentValue == selValue) {
-        isSameValue = true;
-      }
-    }
-
-    Color bgColor = Colors.white;
-    if (isSelected) {
-      bgColor = AppColors.accentPastel;
-    } else if (cell.isErrorHighlight) {
-      bgColor = AppColors.errorPastel;
-    } else if (isSameValue) {
-      bgColor = AppColors.primaryPastel.withValues(alpha: 0.4);
-    } else if (cell.isFixed) {
-      bgColor = AppColors.fixedCellBg;
-    }
-
-    return GestureDetector(
-      onTap: () => _notifier.selectCell(r, c),
-      child: Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          color: bgColor,
-          border: Border(
-            top: BorderSide(
-                width: r % 3 == 0 && r != 0 ? 2 : 0.5,
-                color: Colors.purple.shade300),
-            left: BorderSide(
-                width: c % 3 == 0 && c != 0 ? 2 : 0.5,
-                color: Colors.purple.shade300),
-          ),
-        ),
-        child: Center(
-          child: Text(
-            cell.currentValue == 0 ? '' : cell.currentValue.toString(),
-            style: TextStyle(
-              fontSize: size * 0.5,
-              fontWeight:
-                  cell.isFixed ? FontWeight.bold : FontWeight.w600,
-              color: cell.isFixed
-                  ? const Color(0xFF1F2937)
-                  : AppColors.primaryDark,
-            ),
-          ),
-        ),
-      ),
-    );
   }
 
   Widget _buildActionButtons() {
@@ -595,20 +549,24 @@ class _SudokuGameScreenState extends State<SudokuGameScreen> {
     );
   }
 
-  Widget _buildNumberPad(GameNotifier n) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      constraints: const BoxConstraints(maxWidth: 400),
-      child: Column(
-        children: [
-          Row(children: List.generate(5, (i) => _buildPadButton(n, i + 1))),
-          const SizedBox(height: 10),
-          Row(children: [
-            ...List.generate(4, (i) => _buildPadButton(n, i + 6)),
-            _buildEraseButton(n),
-          ]),
-        ],
-      ),
+  Widget _buildNumberPad() {
+    return Consumer<GameNotifier>(
+      builder: (context, n, _) {
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          constraints: const BoxConstraints(maxWidth: 400),
+          child: Column(
+            children: [
+              Row(children: List.generate(5, (i) => _buildPadButton(n, i + 1))),
+              const SizedBox(height: 10),
+              Row(children: [
+                ...List.generate(4, (i) => _buildPadButton(n, i + 6)),
+                _buildEraseButton(n),
+              ]),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -694,14 +652,17 @@ class _SudokuGameScreenState extends State<SudokuGameScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // context.watch subscribes this widget to GameNotifier changes,
-    // replacing the old ListenableBuilder.
-    final notifier = context.watch<GameNotifier>();
     return Focus(
       autofocus: true,
       onKeyEvent: _handleKeyEvent,
-      child: ConfettiOverlay(
-        showConfetti: notifier.showConfetti,
+      child: Selector<GameNotifier, bool>(
+        selector: (_, n) => n.showConfetti,
+        builder: (context, showConfetti, child) {
+          return ConfettiOverlay(
+            showConfetti: showConfetti,
+            child: child!,
+          );
+        },
         child: Scaffold(
           appBar: AppBar(
             backgroundColor: Colors.transparent,
@@ -729,13 +690,13 @@ class _SudokuGameScreenState extends State<SudokuGameScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     const SizedBox(height: 10),
-                    _buildTopControls(notifier),
+                    _buildTopControls(),
                     const SizedBox(height: 20),
-                    _buildGrid(notifier),
+                    _buildGrid(),
                     const SizedBox(height: 20),
                     _buildActionButtons(),
                     const SizedBox(height: 20),
-                    _buildNumberPad(notifier),
+                    _buildNumberPad(),
                     const SizedBox(height: 20),
                   ],
                 ),

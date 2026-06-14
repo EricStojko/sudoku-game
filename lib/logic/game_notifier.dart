@@ -73,7 +73,7 @@ class GameNotifier extends ChangeNotifier with WidgetsBindingObserver {
     selectedCol = -1;
     secondsElapsed.value = 0;
     hintsUsed = 0;
-    status = GameStatus.playing;
+    status = GameStatus.idle;
     showConfetti = false;
     isLeaderboardEligible = true;
     isUserPaused = false;
@@ -114,6 +114,12 @@ class GameNotifier extends ChangeNotifier with WidgetsBindingObserver {
       isGenerating = false;
     }
 
+    notifyListeners();
+  }
+
+  void startGame() {
+    if (status != GameStatus.idle) return;
+    status = GameStatus.playing;
     _startTimer();
     notifyListeners();
   }

@@ -585,6 +585,34 @@ class _SudokuGameScreenState extends State<SudokuGameScreen> {
                     );
                   },
                 ),
+                Selector<GameNotifier, GameStatus>(
+                  selector: (_, n) => n.status,
+                  builder: (context, status, child) {
+                    if (status != GameStatus.idle) return const SizedBox.shrink();
+                    return Container(
+                      color: Colors.purple.shade50.withValues(alpha: 0.95),
+                      child: Center(
+                        child: ElevatedButton.icon(
+                          onPressed: () => context.read<GameNotifier>().startGame(),
+                          icon: const Icon(Icons.play_arrow_rounded, size: 28),
+                          label: const Text(
+                            'Start Game',
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primaryDark,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(25),
+                            ),
+                            elevation: 4,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
               ],
             ),
           );
@@ -664,7 +692,7 @@ class _SudokuGameScreenState extends State<SudokuGameScreen> {
 
   Widget _buildPadButton(GameNotifier n, int num) {
     final bool isExhausted = n.isNumberExhausted(num);
-    final bool isDisabled = isExhausted || n.isUserPaused;
+    final bool isDisabled = isExhausted || n.isUserPaused || n.status != GameStatus.playing;
     return Expanded(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 4.0),
@@ -706,7 +734,7 @@ class _SudokuGameScreenState extends State<SudokuGameScreen> {
     if (n.selectedRow != -1 && n.selectedCol != -1) {
       isFixed = n.grid[n.selectedRow][n.selectedCol].isFixed;
     }
-    final bool isDisabled = isFixed || n.isUserPaused;
+    final bool isDisabled = isFixed || n.isUserPaused || n.status != GameStatus.playing;
     return Expanded(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 4.0),

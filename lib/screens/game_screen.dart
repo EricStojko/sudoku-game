@@ -149,11 +149,12 @@ class _SudokuGameScreenState extends State<SudokuGameScreen> {
 
     if (!mounted) return;
 
+    final nameCtrl = TextEditingController();
+
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) {
-        final nameCtrl = TextEditingController();
         return AlertDialog(
           backgroundColor: const Color(0xFFFDFBFF),
           shape:
@@ -221,6 +222,7 @@ class _SudokuGameScreenState extends State<SudokuGameScreen> {
                   await LeaderboardService.saveScore(
                       difficulty, name, elapsed);
                 }
+                nameCtrl.dispose();
                 if (context.mounted) {
                   Navigator.pop(context);
                   _showLeaderboard();

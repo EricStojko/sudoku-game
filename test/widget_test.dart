@@ -233,6 +233,7 @@ void main() {
     test('startNewGame sets status to playing', () {
       final notifier = GameNotifier();
       notifier.startNewGame(Difficulty.easy);
+      notifier.startGame();
       expect(notifier.status, GameStatus.playing);
       expect(notifier.isPlaying, isTrue);
       expect(notifier.mistakes, 0);
